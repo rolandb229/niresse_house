@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 import { unlink } from "fs/promises"
 import path from "path"
 
-// GET /api/properties/[id]/images — Récupérer les images d'un bien
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    const propertyId = Number(id)
 
-    const images = await query<{ id: number; image_url: string; ordre: number }>(
-      "SELECT id, image_url, ordre FROM property_images WHERE property_id = ? ORDER BY ordre ASC",
-      [id]
-    )
+    const rows = await prisma.propertyImage.findMany({
+      where: { propertyId },
+      orderBy: { ordre: "asc" },
+      select: { id: true, imageUrl: true, ordre: true },
+    })
 
+    const images = rows.map((r) => ({ id: r.id, image_url: r.imageUrl, ordre: r.ordre }))
     return NextResponse.json({ images })
   } catch (err) {
     console.error("[GET /api/properties/[id]/images]", err)
@@ -23,45 +25,37 @@ export async function GET(
   }
 }
 
-// DELETE /api/properties/[id]/images?image_id=X — Supprimer une image individuelle
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+    const propertyId = Number(id)
     const { searchParams } = new URL(request.url)
-    const imageId = searchParams.get("image_id")
+    const imageIdParam = searchParams.get("image_id")
 
-    if (!imageId) {
+    if (!imageIdParam) {
       return NextResponse.json({ error: "image_id est requis." }, { status: 400 })
     }
 
-    // Récupérer l'URL avant suppression pour effacer le fichier physique
-    const images = await query<{ image_url: string }>(
-      "SELECT image_url FROM property_images WHERE id = ? AND property_id = ?",
-      [imageId, id]
-    )
+    const imageId = Number(imageIdParam)
+    const image = await prisma.propertyImage.findFirst({
+      where: { id: imageId, propertyId },
+      select: { imageUrl: true },
+    })
 
-    if (images.length === 0) {
+    if (!image) {
       return NextResponse.json({ error: "Image introuvable." }, { status: 404 })
     }
 
-    const imageUrl = images[0].image_url
+    await prisma.propertyImage.delete({ where: { id: imageId } })
 
-    // Supprimer de la base de données
-    await execute(
-      "DELETE FROM property_images WHERE id = ? AND property_id = ?",
-      [imageId, id]
-    )
-
-    // Supprimer le fichier physique uniquement pour les uploads locaux
-    if (imageUrl.startsWith("/uploads/")) {
+    if (image.imageUrl.startsWith("/uploads/")) {
       try {
-        const filePath = path.join(process.cwd(), "public", imageUrl)
-        await unlink(filePath)
+        await unlink(path.join(process.cwd(), "public", image.imageUrl))
       } catch {
-        // Fichier déjà absent, on ignore silencieusement
+        // Fichier déjà absent
       }
     }
 

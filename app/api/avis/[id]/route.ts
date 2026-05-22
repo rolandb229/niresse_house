@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 
-// PUT /api/avis/[id] — Approuver/Refuser un avis
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -10,7 +9,10 @@ export async function PUT(
     const { id } = await params
     const { approuve } = await request.json()
 
-    await execute("UPDATE reviews SET approuve = ? WHERE id = ?", [approuve ? 1 : 0, id])
+    await prisma.review.update({
+      where: { id: Number(id) },
+      data: { approuve: !!approuve },
+    })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[PUT /api/avis/[id]]", err)
@@ -18,14 +20,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/avis/[id]
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    await execute("DELETE FROM reviews WHERE id = ?", [id])
+    await prisma.review.delete({ where: { id: Number(id) } })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[DELETE /api/avis/[id]]", err)

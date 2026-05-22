@@ -1,66 +1,82 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 
-// GET /api/statistiques — Dashboard stats
 export async function GET() {
   try {
-    // Comptes généraux
-    const [totalBiens] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM properties")
-    const [totalMessages] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM contact_requests")
-    const [totalReservations] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM reservations")
-    const [totalUsers] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM users")
-    const [totalAvis] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM reviews WHERE approuve = TRUE")
-    const [nouveauxMessages] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM contact_requests WHERE statut = 'nouveau'")
-    const [reservationsEnAttente] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM reservations WHERE statut = 'en_attente'")
-    const [biensDisponibles] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM properties WHERE statut = 'disponible'")
-    const [promotions] = await query<{ count: number }>("SELECT COUNT(*) AS count FROM promotions WHERE active = TRUE")
+    const [
+      totalBiens,
+      totalMessages,
+      totalReservations,
+      totalUsers,
+      totalAvis,
+      nouveauxMessages,
+      reservationsEnAttente,
+      biensDisponibles,
+      promotionsActives,
+      parType,
+      parStatut,
+      topVillesRaw,
+      biensRecents,
+      vuesAgg,
+    ] = await Promise.all([
+      prisma.property.count(),
+      prisma.contactRequest.count(),
+      prisma.reservation.count(),
+      prisma.user.count(),
+      prisma.review.count({ where: { approuve: true } }),
+      prisma.contactRequest.count({ where: { statut: "nouveau" } }),
+      prisma.reservation.count({ where: { statut: "en_attente" } }),
+      prisma.property.count({ where: { statut: "disponible" } }),
+      prisma.promotion.count({ where: { active: true } }),
+      prisma.property.groupBy({ by: ["type"], _count: { _all: true } }),
+      prisma.property.groupBy({ by: ["statut"], _count: { _all: true } }),
+      prisma.property.findMany({
+        select: { quartier: { include: { ville: true } } },
+      }),
+      prisma.property.findMany({
+        orderBy: { dateCreation: "desc" },
+        take: 5,
+        select: { id: true, titre: true, type: true, statut: true, dateCreation: true },
+      }),
+      prisma.property.aggregate({ _sum: { vues: true } }),
+    ])
 
-    // Répartition par type
-    const parType = await query<{ type: string; count: number }>(
-      "SELECT type, COUNT(*) AS count FROM properties GROUP BY type"
-    )
-
-    // Répartition par statut
-    const parStatut = await query<{ statut: string; count: number }>(
-      "SELECT statut, COUNT(*) AS count FROM properties GROUP BY statut"
-    )
-
-    // Top villes
-    const topVilles = await query<{ ville: string; count: number }>(
-      `SELECT v.nom AS ville, COUNT(p.id) AS count
-       FROM properties p
-       JOIN quartiers q ON p.quartier_id = q.id
-       JOIN villes v ON q.ville_id = v.id
-       GROUP BY v.nom ORDER BY count DESC LIMIT 5`
-    )
-
-    // Biens récents
-    const biensRecents = await query<{ id: number; titre: string; type: string; statut: string; date_creation: string }>(
-      "SELECT id, titre, type, statut, date_creation FROM properties ORDER BY date_creation DESC LIMIT 5"
-    )
-
-    // Vues totales
-    const [totalVues] = await query<{ total: number }>("SELECT SUM(vues) AS total FROM properties")
+    // Calcul des top villes en JS (groupBy sur relation non supporté directement)
+    const villeCounts = new Map<string, number>()
+    for (const row of topVillesRaw) {
+      const villeNom = row.quartier?.ville?.nom
+      if (villeNom) villeCounts.set(villeNom, (villeCounts.get(villeNom) ?? 0) + 1)
+    }
+    const topVilles = Array.from(villeCounts.entries())
+      .map(([ville, count]) => ({ ville, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
 
     return NextResponse.json({
       totaux: {
-        biens: totalBiens.count,
-        messages: totalMessages.count,
-        reservations: totalReservations.count,
-        users: totalUsers.count,
-        avis: totalAvis.count,
-        vues: totalVues.total || 0,
-        promotions: promotions.count,
+        biens: totalBiens,
+        messages: totalMessages,
+        reservations: totalReservations,
+        users: totalUsers,
+        avis: totalAvis,
+        vues: vuesAgg._sum.vues ?? 0,
+        promotions: promotionsActives,
       },
       alertes: {
-        nouveauxMessages: nouveauxMessages.count,
-        reservationsEnAttente: reservationsEnAttente.count,
-        biensDisponibles: biensDisponibles.count,
+        nouveauxMessages,
+        reservationsEnAttente,
+        biensDisponibles,
       },
-      parType,
-      parStatut,
+      parType: parType.map((p) => ({ type: p.type, count: p._count._all })),
+      parStatut: parStatut.map((p) => ({ statut: p.statut, count: p._count._all })),
       topVilles,
-      biensRecents,
+      biensRecents: biensRecents.map((b) => ({
+        id: b.id,
+        titre: b.titre,
+        type: b.type,
+        statut: b.statut,
+        date_creation: b.dateCreation.toISOString(),
+      })),
     })
   } catch (err) {
     console.error("[GET /api/statistiques]", err)

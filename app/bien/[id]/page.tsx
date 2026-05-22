@@ -210,13 +210,13 @@ export default async function PropertyDetailPage({
                   </p>
                   {/* Rating and views */}
                   <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-                    {property.note_moyenne > 0 && (
+                    {(property.note_moyenne ?? 0) > 0 && (
                       <span className="flex items-center gap-1 text-[#C9A227]">
                         <Star className="h-4 w-4 fill-current" />
                         {Number(property.note_moyenne).toFixed(1)} ({property.nombre_avis} avis)
                       </span>
                     )}
-                    {property.vues > 0 && (
+                    {(property.vues ?? 0) > 0 && (
                       <span className="flex items-center gap-1">
                         <Eye className="h-4 w-4" />
                         {property.vues} vues

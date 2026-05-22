@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// Utilisateurs et authentification
+// =====================================================
+
+enum UserRole {
+  super_admin
+  admin
+  commercial
+  client
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  nom          String
+  email        String   @unique
+  telephone    String?
+  motDePasse   String   @map("mot_de_passe")
+  role         UserRole @default(client)
+  actif        Boolean  @default(true)
+  dateCreation DateTime @default(now()) @map("date_creation")
+
+  properties   Property[]    @relation("PropertyProprietaire")
+  reservations Reservation[]
+
+  @@map("users")
+}
+
+// =====================================================
+// Geographie : Departements -> Villes -> Quartiers
+// =====================================================
+
+model Departement {
+  id     Int     @id @default(autoincrement())
+  nom    String  @unique
+  villes Ville[]
+
+  @@map("departements")
+}
+
+model Ville {
+  id            Int        @id @default(autoincrement())
+  nom           String
+  departementId Int        @map("departement_id")
+  departement   Departement @relation(fields: [departementId], references: [id], onDelete: Cascade)
+  quartiers     Quartier[]
+
+  @@unique([nom, departementId])
+  @@map("villes")
+}
+
+model Quartier {
+  id         Int        @id @default(autoincrement())
+  nom        String
+  villeId    Int        @map("ville_id")
+  ville      Ville      @relation(fields: [villeId], references: [id], onDelete: Cascade)
+  properties Property[]
+
+  @@unique([nom, villeId])
+  @@map("quartiers")
+}
+
+// =====================================================
+// Biens immobiliers
+// =====================================================
+
+enum PropertyType {
+  location
+  vente
+  court_sejour
+  auberge
+  hotel
+  chambre_meublee
+  appartement_meuble
+}
+
+enum PropertyStatus {
+  disponible
+  loue
+  vendu
+  suspendu
+  reserve
+}
+
+model Property {
+  id              Int            @id @default(autoincrement())
+  titre           String
+  description     String?
+  type            PropertyType
+  prix            Decimal        @db.Decimal(12, 2)
+  nombreChambres  Int            @default(0) @map("nombre_chambres")
+  nombreDouches   Int            @default(0) @map("nombre_douches")
+  surface         Decimal?       @db.Decimal(10, 2)
+  statut          PropertyStatus @default(disponible)
+  codeUnique      String         @unique @map("code_unique")
+  verifie         Boolean        @default(false)
+  premium         Boolean        @default(false)
+  enPromotion     Boolean        @default(false) @map("en_promotion")
+  reduction       Int?
+  equipements     Json?
+  vues            Int            @default(0)
+  dateCreation    DateTime       @default(now()) @map("date_creation")
+
+  quartierId      Int            @map("quartier_id")
+  quartier        Quartier       @relation(fields: [quartierId], references: [id])
+
+  proprietaireId  Int            @map("proprietaire_id")
+  proprietaire    User           @relation("PropertyProprietaire", fields: [proprietaireId], references: [id])
+
+  images           PropertyImage[]
+  reviews          Review[]
+  reservations     Reservation[]
+  contactRequests  ContactRequest[]
+  promotions       Promotion[]
+
+  @@index([type])
+  @@index([statut])
+  @@index([quartierId])
+  @@index([premium])
+  @@index([enPromotion])
+  @@map("properties")
+}
+
+enum ImageType {
+  photo
+  video
+}
+
+model PropertyImage {
+  id         Int       @id @default(autoincrement())
+  propertyId Int       @map("property_id")
+  imageUrl   String    @map("image_url")
+  type       ImageType @default(photo)
+  ordre      Int       @default(0)
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+// =====================================================
+// Reservations (court sejour / hotel uniquement)
+// =====================================================
+
+enum ReservationStatus {
+  en_attente
+  confirmee
+  annulee
+  terminee
+}
+
+model Reservation {
+  id               Int               @id @default(autoincrement())
+  propertyId       Int               @map("property_id")
+  property         Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  userId           Int?              @map("user_id")
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  nomClient        String            @map("nom_client")
+  telephone        String
+  email            String?
+  dateDebut        DateTime          @map("date_debut") @db.Date
+  dateFin          DateTime          @map("date_fin") @db.Date
+  nombrePersonnes  Int               @default(1) @map("nombre_personnes")
+  statut           ReservationStatus @default(en_attente)
+  montantTotal     Decimal           @db.Decimal(12, 2) @map("montant_total")
+  dateCreation     DateTime          @default(now()) @map("date_creation")
+
+  @@index([propertyId])
+  @@index([statut])
+  @@map("reservations")
+}
+
+// =====================================================
+// Demandes de contact (visites pour location/vente)
+// =====================================================
+
+enum ContactStatus {
+  nouveau
+  en_traitement
+  cloture
+}
+
+model ContactRequest {
+  id           Int           @id @default(autoincrement())
+  propertyId   Int?          @map("property_id")
+  property     Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  nom          String
+  telephone    String
+  email        String?
+  message      String
+  statut       ContactStatus @default(nouveau)
+  dateCreation DateTime      @default(now()) @map("date_creation")
+
+  @@index([statut])
+  @@map("contact_requests")
+}
+
+// =====================================================
+// Avis (reviews) avec moderation
+// =====================================================
+
+model Review {
+  id           Int      @id @default(autoincrement())
+  propertyId   Int      @map("property_id")
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  userName     String   @map("user_name")
+  userEmail    String?  @map("user_email")
+  note         Int
+  commentaire  String
+  approuve     Boolean  @default(false)
+  dateCreation DateTime @default(now()) @map("date_creation")
+
+  @@index([propertyId])
+  @@index([approuve])
+  @@map("reviews")
+}
+
+// =====================================================
+// Promotions
+// =====================================================
+
+model Promotion {
+  id           Int      @id @default(autoincrement())
+  propertyId   Int      @map("property_id")
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  reduction    Int
+  dateDebut    DateTime @map("date_debut") @db.Date
+  dateFin      DateTime @map("date_fin") @db.Date
+  active       Boolean  @default(true)
+  dateCreation DateTime @default(now()) @map("date_creation")
+
+  @@index([propertyId])
+  @@index([active])
+  @@map("promotions")
+}
+
+// =====================================================
+// Statistiques visiteurs
+// =====================================================
+
+model VisitorStat {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @db.Date
+  page       String
+  visiteurs  Int      @default(0)
+  vues       Int      @default(0)
+
+  @@unique([date, page])
+  @@map("visitor_stats")
+}

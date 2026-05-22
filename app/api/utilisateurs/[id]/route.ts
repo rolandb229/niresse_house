@@ -1,30 +1,29 @@
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import type { Prisma } from "@prisma/client"
 
-// PUT /api/utilisateurs/[id]
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { nom, email, telephone, role, mot_de_passe, actif } = body
+    const { nom, email, telephone, role, mot_de_passe, actif } = await request.json()
 
-    if (mot_de_passe) {
-      const hashed = await bcrypt.hash(mot_de_passe, 10)
-      await execute(
-        "UPDATE users SET nom = ?, email = ?, telephone = ?, role = ?, mot_de_passe = ?, actif = ? WHERE id = ?",
-        [nom, email, telephone, role, hashed, actif !== undefined ? (actif ? 1 : 0) : 1, id]
-      )
-    } else {
-      await execute(
-        "UPDATE users SET nom = ?, email = ?, telephone = ?, role = ?, actif = ? WHERE id = ?",
-        [nom, email, telephone, role, actif !== undefined ? (actif ? 1 : 0) : 1, id]
-      )
+    const data: Prisma.UserUpdateInput = {
+      nom,
+      email,
+      telephone,
+      role,
+      actif: actif !== undefined ? !!actif : true,
     }
 
+    if (mot_de_passe) {
+      data.motDePasse = await bcrypt.hash(mot_de_passe, 10)
+    }
+
+    await prisma.user.update({ where: { id: Number(id) }, data })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[PUT /api/utilisateurs/[id]]", err)
@@ -32,14 +31,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/utilisateurs/[id]
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    await execute("DELETE FROM users WHERE id = ?", [id])
+    await prisma.user.delete({ where: { id: Number(id) } })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[DELETE /api/utilisateurs/[id]]", err)

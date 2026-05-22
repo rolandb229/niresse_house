@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { query } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
-import type { User } from "@/lib/types"
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { email, password } = body
+    const { email, password } = await request.json()
 
     if (!email || !password) {
       return NextResponse.json(
@@ -16,41 +14,25 @@ export async function POST(request: Request) {
       )
     }
 
-    // Chercher l'utilisateur dans MySQL
-    // actif peut valoir NULL si non initialisé — on ne bloque que si actif = 0 explicitement
-    let rows: (User & { mot_de_passe: string; actif: number | null })[] = []
-    try {
-      rows = await query<User & { mot_de_passe: string; actif: number | null }>(
-        "SELECT id, nom, email, telephone, role, mot_de_passe, actif FROM users WHERE email = ? LIMIT 1",
-        [email]
-      )
-    } catch {
-      // Fallback : la colonne actif n'existe pas encore dans cette base
-      rows = await query<User & { mot_de_passe: string; actif: number | null }>(
-        "SELECT id, nom, email, telephone, role, mot_de_passe FROM users WHERE email = ? LIMIT 1",
-        [email]
-      )
-    }
+    const user = await prisma.user.findUnique({
+      where: { email },
+    })
 
-    if (!rows.length) {
+    if (!user) {
       return NextResponse.json(
         { error: "Email ou mot de passe incorrect." },
         { status: 401 }
       )
     }
 
-    const user = rows[0]
-
-    // Bloquer uniquement si actif vaut explicitement 0 (pas NULL, pas undefined)
-    if (user.actif === 0) {
+    if (!user.actif) {
       return NextResponse.json(
         { error: "Compte désactivé. Contactez l'administrateur." },
         { status: 403 }
       )
     }
 
-    // Vérifier le mot de passe avec bcrypt
-    const valid = await bcrypt.compare(password, user.mot_de_passe)
+    const valid = await bcrypt.compare(password, user.motDePasse)
     if (!valid) {
       return NextResponse.json(
         { error: "Email ou mot de passe incorrect." },
@@ -58,7 +40,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Créer session via cookie HTTP-only
     const sessionData = JSON.stringify({
       id: user.id,
       email: user.email,
@@ -71,7 +52,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 24 heures
+      maxAge: 60 * 60 * 24,
       path: "/",
     })
 
@@ -82,7 +63,7 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("[login]", err)
     return NextResponse.json(
-      { error: "Impossible de se connecter à la base de données. Vérifiez que XAMPP/MySQL est démarré." },
+      { error: "Erreur serveur lors de la connexion." },
       { status: 500 }
     )
   }

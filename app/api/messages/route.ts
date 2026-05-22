@@ -1,32 +1,36 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/mysql"
-import type { ContactRequest } from "@/lib/types"
+import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
-// GET /api/messages — Liste des messages de contact
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const statut = searchParams.get("statut")
     const property_id = searchParams.get("property_id")
 
-    let sql = `
-      SELECT 
-        cr.id, cr.property_id, cr.nom, cr.telephone, cr.email,
-        cr.message, cr.statut, cr.date_creation,
-        p.titre AS property_titre
-      FROM contact_requests cr
-      LEFT JOIN properties p ON cr.property_id = p.id
-      WHERE 1=1
-    `
-    const params: unknown[] = []
+    const where: Prisma.ContactRequestWhereInput = {}
+    if (statut) where.statut = statut as Prisma.EnumContactStatusFilter["equals"]
+    if (property_id) where.propertyId = Number(property_id)
 
-    if (statut) { sql += " AND cr.statut = ?"; params.push(statut) }
-    if (property_id) { sql += " AND cr.property_id = ?"; params.push(property_id) }
+    const rows = await prisma.contactRequest.findMany({
+      where,
+      include: { property: { select: { titre: true } } },
+      orderBy: { dateCreation: "desc" },
+    })
 
-    sql += " ORDER BY cr.date_creation DESC"
+    const messages = rows.map((m) => ({
+      id: m.id,
+      property_id: m.propertyId,
+      nom: m.nom,
+      telephone: m.telephone,
+      email: m.email,
+      message: m.message,
+      statut: m.statut,
+      date_creation: m.dateCreation.toISOString(),
+      property_titre: m.property?.titre ?? null,
+    }))
 
-    const rows = await query<ContactRequest & { property_titre: string }>(sql, params)
-    return NextResponse.json({ messages: rows })
+    return NextResponse.json({ messages })
   } catch (err) {
     console.error("[GET /api/messages]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })

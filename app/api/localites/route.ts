@@ -1,39 +1,67 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 
-// GET /api/localites — Toutes les localités (départements, villes, quartiers)
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get("type") // "departements" | "villes" | "quartiers" | "all"
+    const type = searchParams.get("type")
     const departement_id = searchParams.get("departement_id")
     const ville_id = searchParams.get("ville_id")
 
-    if (type === "departements" || !type) {
-      const departements = await query("SELECT id, nom, code FROM departements ORDER BY nom")
-      if (type === "departements") return NextResponse.json({ departements })
+    if (!type || type === "all") {
+      const [departements, villes, quartiers] = await Promise.all([
+        prisma.departement.findMany({ orderBy: { nom: "asc" } }),
+        prisma.ville.findMany({
+          orderBy: { nom: "asc" },
+          select: { id: true, nom: true, departementId: true },
+        }),
+        prisma.quartier.findMany({
+          orderBy: { nom: "asc" },
+          select: { id: true, nom: true, villeId: true },
+        }),
+      ])
+      return NextResponse.json({
+        departements,
+        villes: villes.map((v) => ({ id: v.id, nom: v.nom, departement_id: v.departementId })),
+        quartiers: quartiers.map((q) => ({ id: q.id, nom: q.nom, ville_id: q.villeId })),
+      })
+    }
 
-      const villes = await query("SELECT id, departement_id, nom FROM villes ORDER BY nom")
-      const quartiers = await query("SELECT id, ville_id, nom FROM quartiers ORDER BY nom")
-      return NextResponse.json({ departements, villes, quartiers })
+    if (type === "departements") {
+      const departements = await prisma.departement.findMany({ orderBy: { nom: "asc" } })
+      return NextResponse.json({ departements })
     }
 
     if (type === "villes") {
-      let sql = "SELECT v.id, v.nom, v.departement_id, d.nom AS departement FROM villes v JOIN departements d ON v.departement_id = d.id"
-      const params: unknown[] = []
-      if (departement_id) { sql += " WHERE v.departement_id = ?"; params.push(departement_id) }
-      sql += " ORDER BY v.nom"
-      const villes = await query(sql, params)
-      return NextResponse.json({ villes })
+      const villes = await prisma.ville.findMany({
+        where: departement_id ? { departementId: Number(departement_id) } : undefined,
+        include: { departement: true },
+        orderBy: { nom: "asc" },
+      })
+      return NextResponse.json({
+        villes: villes.map((v) => ({
+          id: v.id,
+          nom: v.nom,
+          departement_id: v.departementId,
+          departement: v.departement.nom,
+        })),
+      })
     }
 
     if (type === "quartiers") {
-      let sql = "SELECT q.id, q.nom, q.ville_id, v.nom AS ville FROM quartiers q JOIN villes v ON q.ville_id = v.id"
-      const params: unknown[] = []
-      if (ville_id) { sql += " WHERE q.ville_id = ?"; params.push(ville_id) }
-      sql += " ORDER BY q.nom"
-      const quartiers = await query(sql, params)
-      return NextResponse.json({ quartiers })
+      const quartiers = await prisma.quartier.findMany({
+        where: ville_id ? { villeId: Number(ville_id) } : undefined,
+        include: { ville: true },
+        orderBy: { nom: "asc" },
+      })
+      return NextResponse.json({
+        quartiers: quartiers.map((q) => ({
+          id: q.id,
+          nom: q.nom,
+          ville_id: q.villeId,
+          ville: q.ville.nom,
+        })),
+      })
     }
 
     return NextResponse.json({ error: "Type invalide." }, { status: 400 })
@@ -43,22 +71,28 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/localites — Ajouter un quartier
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { type, nom, departement_id, ville_id } = body
+    const { type, nom, departement_id, ville_id } = await request.json()
 
     if (type === "ville") {
-      if (!nom || !departement_id) return NextResponse.json({ error: "Champs manquants." }, { status: 400 })
-      const result = await execute("INSERT INTO villes (nom, departement_id) VALUES (?, ?)", [nom, departement_id])
-      return NextResponse.json({ success: true, id: result.insertId })
+      if (!nom || !departement_id) {
+        return NextResponse.json({ error: "Champs manquants." }, { status: 400 })
+      }
+      const created = await prisma.ville.create({
+        data: { nom, departementId: Number(departement_id) },
+      })
+      return NextResponse.json({ success: true, id: created.id })
     }
 
     if (type === "quartier") {
-      if (!nom || !ville_id) return NextResponse.json({ error: "Champs manquants." }, { status: 400 })
-      const result = await execute("INSERT INTO quartiers (nom, ville_id) VALUES (?, ?)", [nom, ville_id])
-      return NextResponse.json({ success: true, id: result.insertId })
+      if (!nom || !ville_id) {
+        return NextResponse.json({ error: "Champs manquants." }, { status: 400 })
+      }
+      const created = await prisma.quartier.create({
+        data: { nom, villeId: Number(ville_id) },
+      })
+      return NextResponse.json({ success: true, id: created.id })
     }
 
     return NextResponse.json({ error: "Type invalide." }, { status: 400 })

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
+import type { ContactStatus } from "@prisma/client"
 
-// PUT /api/messages/[id] — Changer le statut d'un message
+const VALID_STATUTS: ContactStatus[] = ["nouveau", "en_traitement", "cloture"]
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -10,11 +12,14 @@ export async function PUT(
     const { id } = await params
     const { statut } = await request.json()
 
-    if (!["nouveau", "en_traitement", "cloture"].includes(statut)) {
+    if (!VALID_STATUTS.includes(statut)) {
       return NextResponse.json({ error: "Statut invalide." }, { status: 400 })
     }
 
-    await execute("UPDATE contact_requests SET statut = ? WHERE id = ?", [statut, id])
+    await prisma.contactRequest.update({
+      where: { id: Number(id) },
+      data: { statut },
+    })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[PUT /api/messages/[id]]", err)
@@ -22,14 +27,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/messages/[id]
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    await execute("DELETE FROM contact_requests WHERE id = ?", [id])
+    await prisma.contactRequest.delete({ where: { id: Number(id) } })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[DELETE /api/messages/[id]]", err)

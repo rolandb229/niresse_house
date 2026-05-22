@@ -1,30 +1,42 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/mysql"
-import type { Promotion } from "@/lib/types"
+import { prisma } from "@/lib/prisma"
 
-// GET /api/promotions
 export async function GET() {
   try {
-    const rows = await query<Promotion & { property_titre: string; property_ville: string }>(
-      `SELECT pr.*, p.titre AS property_titre, v.nom AS property_ville
-       FROM promotions pr
-       JOIN properties p ON pr.property_id = p.id
-       LEFT JOIN quartiers q ON p.quartier_id = q.id
-       LEFT JOIN villes v ON q.ville_id = v.id
-       ORDER BY pr.date_creation DESC`
-    )
-    return NextResponse.json({ promotions: rows })
+    const rows = await prisma.promotion.findMany({
+      include: {
+        property: {
+          select: {
+            titre: true,
+            quartier: { include: { ville: true } },
+          },
+        },
+      },
+      orderBy: { dateCreation: "desc" },
+    })
+
+    const promotions = rows.map((pr) => ({
+      id: pr.id,
+      property_id: pr.propertyId,
+      reduction: pr.reduction,
+      date_debut: pr.dateDebut.toISOString(),
+      date_fin: pr.dateFin.toISOString(),
+      active: pr.active,
+      date_creation: pr.dateCreation.toISOString(),
+      property_titre: pr.property.titre,
+      property_ville: pr.property.quartier?.ville?.nom ?? null,
+    }))
+
+    return NextResponse.json({ promotions })
   } catch (err) {
     console.error("[GET /api/promotions]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })
   }
 }
 
-// POST /api/promotions — Créer une promotion
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { property_id, reduction, date_debut, date_fin } = body
+    const { property_id, reduction, date_debut, date_fin } = await request.json()
 
     if (!property_id || !reduction || !date_debut || !date_fin) {
       return NextResponse.json({ error: "Champs requis manquants." }, { status: 400 })
@@ -34,18 +46,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La réduction doit être entre 1% et 50%." }, { status: 400 })
     }
 
-    const result = await execute(
-      "INSERT INTO promotions (property_id, reduction, date_debut, date_fin, active) VALUES (?, ?, ?, ?, TRUE)",
-      [property_id, reduction, date_debut, date_fin]
-    )
+    const created = await prisma.$transaction(async (tx) => {
+      const promo = await tx.promotion.create({
+        data: {
+          propertyId: Number(property_id),
+          reduction: Number(reduction),
+          dateDebut: new Date(date_debut),
+          dateFin: new Date(date_fin),
+          active: true,
+        },
+      })
 
-    // Marquer le bien comme en promotion
-    await execute(
-      "UPDATE properties SET en_promotion = TRUE, reduction = ? WHERE id = ?",
-      [reduction, property_id]
-    )
+      await tx.property.update({
+        where: { id: Number(property_id) },
+        data: { enPromotion: true, reduction: Number(reduction) },
+      })
 
-    return NextResponse.json({ success: true, id: result.insertId })
+      return promo
+    })
+
+    return NextResponse.json({ success: true, id: created.id })
   } catch (err) {
     console.error("[POST /api/promotions]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })

@@ -1,64 +1,71 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/mysql"
-import type { Reservation } from "@/lib/types"
+import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
-// GET /api/reservations
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const statut = searchParams.get("statut")
     const property_id = searchParams.get("property_id")
 
-    let sql = `
-      SELECT 
-        r.id, r.property_id, r.nom_client, r.telephone, r.email,
-        r.date_debut, r.date_fin, r.nombre_personnes, r.statut,
-        r.montant_total, r.notes, r.date_creation,
-        p.titre AS property_titre
-      FROM reservations r
-      LEFT JOIN properties p ON r.property_id = p.id
-      WHERE 1=1
-    `
-    const params: unknown[] = []
+    const where: Prisma.ReservationWhereInput = {}
+    if (statut) where.statut = statut as Prisma.EnumReservationStatusFilter["equals"]
+    if (property_id) where.propertyId = Number(property_id)
 
-    if (statut) { sql += " AND r.statut = ?"; params.push(statut) }
-    if (property_id) { sql += " AND r.property_id = ?"; params.push(property_id) }
+    const rows = await prisma.reservation.findMany({
+      where,
+      include: { property: { select: { titre: true } } },
+      orderBy: { dateCreation: "desc" },
+    })
 
-    sql += " ORDER BY r.date_creation DESC"
+    const reservations = rows.map((r) => ({
+      id: r.id,
+      property_id: r.propertyId,
+      nom_client: r.nomClient,
+      telephone: r.telephone,
+      email: r.email,
+      date_debut: r.dateDebut.toISOString(),
+      date_fin: r.dateFin.toISOString(),
+      nombre_personnes: r.nombrePersonnes,
+      statut: r.statut,
+      montant_total: Number(r.montantTotal),
+      date_creation: r.dateCreation.toISOString(),
+      property_titre: r.property?.titre ?? null,
+    }))
 
-    const rows = await query<Reservation & { property_titre: string }>(sql, params)
-    return NextResponse.json({ reservations: rows })
+    return NextResponse.json({ reservations })
   } catch (err) {
     console.error("[GET /api/reservations]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })
   }
 }
 
-// POST /api/reservations — Nouvelle réservation
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const {
       property_id, nom_client, telephone, email,
-      date_debut, date_fin, nombre_personnes, montant_total, notes,
+      date_debut, date_fin, nombre_personnes, montant_total,
     } = body
 
     if (!property_id || !nom_client || !telephone || !date_debut || !date_fin) {
       return NextResponse.json({ error: "Champs obligatoires manquants." }, { status: 400 })
     }
 
-    const result = await execute(
-      `INSERT INTO reservations 
-        (property_id, nom_client, telephone, email, date_debut, date_fin, nombre_personnes, montant_total, notes, statut)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente')`,
-      [
-        property_id, nom_client, telephone, email || null,
-        date_debut, date_fin, nombre_personnes || 1,
-        montant_total || null, notes || null,
-      ]
-    )
+    const created = await prisma.reservation.create({
+      data: {
+        propertyId: Number(property_id),
+        nomClient: nom_client,
+        telephone,
+        email: email ?? null,
+        dateDebut: new Date(date_debut),
+        dateFin: new Date(date_fin),
+        nombrePersonnes: nombre_personnes ?? 1,
+        montantTotal: montant_total ?? 0,
+      },
+    })
 
-    return NextResponse.json({ success: true, id: result.insertId })
+    return NextResponse.json({ success: true, id: created.id })
   } catch (err) {
     console.error("[POST /api/reservations]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })

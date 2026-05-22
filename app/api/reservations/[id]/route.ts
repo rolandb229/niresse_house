@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
+import type { ReservationStatus } from "@prisma/client"
 
-// PUT /api/reservations/[id] — Changer le statut
+const VALID_STATUTS: ReservationStatus[] = ["en_attente", "confirmee", "annulee", "terminee"]
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -10,11 +12,14 @@ export async function PUT(
     const { id } = await params
     const { statut } = await request.json()
 
-    if (!["en_attente", "confirmee", "annulee", "terminee"].includes(statut)) {
+    if (!VALID_STATUTS.includes(statut)) {
       return NextResponse.json({ error: "Statut invalide." }, { status: 400 })
     }
 
-    await execute("UPDATE reservations SET statut = ? WHERE id = ?", [statut, id])
+    await prisma.reservation.update({
+      where: { id: Number(id) },
+      data: { statut },
+    })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[PUT /api/reservations/[id]]", err)
@@ -22,14 +27,13 @@ export async function PUT(
   }
 }
 
-// DELETE /api/reservations/[id]
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    await execute("DELETE FROM reservations WHERE id = ?", [id])
+    await prisma.reservation.delete({ where: { id: Number(id) } })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[DELETE /api/reservations/[id]]", err)

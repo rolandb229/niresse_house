@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/mysql"
+import { prisma } from "@/lib/prisma"
 
-// POST /api/contact — Enregistrer une demande de contact dans MySQL
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { property_id, nom, telephone, email, message } = body
+    const { property_id, nom, telephone, email, message } = await request.json()
 
     if (!nom || !telephone || !message) {
       return NextResponse.json(
@@ -21,10 +19,15 @@ export async function POST(request: Request) {
       )
     }
 
-    await execute(
-      "INSERT INTO contact_requests (property_id, nom, telephone, email, message, statut) VALUES (?, ?, ?, ?, ?, 'nouveau')",
-      [property_id, nom, telephone, email || null, message]
-    )
+    await prisma.contactRequest.create({
+      data: {
+        propertyId: property_id ?? null,
+        nom,
+        telephone,
+        email: email ?? null,
+        message,
+      },
+    })
 
     return NextResponse.json({
       success: true,
@@ -32,9 +35,6 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("[contact]", err)
-    return NextResponse.json(
-      { error: "Erreur serveur. Vérifiez que XAMPP/MySQL est démarré." },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })
   }
 }

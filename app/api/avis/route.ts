@@ -1,41 +1,46 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/mysql"
-import type { Review } from "@/lib/types"
+import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
-// GET /api/avis
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const property_id = searchParams.get("property_id")
     const approuve = searchParams.get("approuve")
 
-    let sql = `
-      SELECT r.*, p.titre AS property_titre
-      FROM reviews r
-      LEFT JOIN properties p ON r.property_id = p.id
-      WHERE 1=1
-    `
-    const params: unknown[] = []
+    const where: Prisma.ReviewWhereInput = {}
+    if (property_id) where.propertyId = Number(property_id)
+    if (approuve === "true") where.approuve = true
+    if (approuve === "false") where.approuve = false
 
-    if (property_id) { sql += " AND r.property_id = ?"; params.push(property_id) }
-    if (approuve === "true") { sql += " AND r.approuve = TRUE" }
-    if (approuve === "false") { sql += " AND r.approuve = FALSE" }
+    const rows = await prisma.review.findMany({
+      where,
+      include: { property: { select: { titre: true } } },
+      orderBy: { dateCreation: "desc" },
+    })
 
-    sql += " ORDER BY r.date_creation DESC"
+    const avis = rows.map((r) => ({
+      id: r.id,
+      property_id: r.propertyId,
+      user_name: r.userName,
+      user_email: r.userEmail,
+      note: r.note,
+      commentaire: r.commentaire,
+      approuve: r.approuve,
+      date_creation: r.dateCreation.toISOString(),
+      property_titre: r.property?.titre ?? null,
+    }))
 
-    const rows = await query<Review & { property_titre: string }>(sql, params)
-    return NextResponse.json({ avis: rows })
+    return NextResponse.json({ avis })
   } catch (err) {
     console.error("[GET /api/avis]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })
   }
 }
 
-// POST /api/avis — Laisser un avis
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { property_id, user_name, user_email, note, commentaire } = body
+    const { property_id, user_name, user_email, note, commentaire } = await request.json()
 
     if (!property_id || !user_name || !note || !commentaire) {
       return NextResponse.json({ error: "Champs obligatoires manquants." }, { status: 400 })
@@ -45,12 +50,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La note doit être entre 1 et 5." }, { status: 400 })
     }
 
-    const result = await execute(
-      "INSERT INTO reviews (property_id, user_name, user_email, note, commentaire, approuve) VALUES (?, ?, ?, ?, ?, FALSE)",
-      [property_id, user_name, user_email || null, note, commentaire]
-    )
+    const created = await prisma.review.create({
+      data: {
+        propertyId: Number(property_id),
+        userName: user_name,
+        userEmail: user_email ?? null,
+        note: Number(note),
+        commentaire,
+      },
+    })
 
-    return NextResponse.json({ success: true, id: result.insertId })
+    return NextResponse.json({ success: true, id: created.id })
   } catch (err) {
     console.error("[POST /api/avis]", err)
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 })
