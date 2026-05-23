@@ -1,21 +1,18 @@
 import Link from "next/link"
 import { Tag, ArrowRight } from "lucide-react"
-import PropertyCard from "@/components/property-card"
+import PropertyCarousel from "@/components/property-carousel"
 import { Button } from "@/components/ui/button"
-import type { Property } from "@/lib/types"
+import { prisma } from "@/lib/prisma"
+import { propertyIncludeAll, serializeProperty } from "@/lib/serializers"
 
-async function getPromotions(): Promise<Property[]> {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-    const res = await fetch(`${baseUrl}/api/properties?en_promotion=true&limit=3`, {
-      cache: "no-store",
-    })
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data.properties || []) as Property[]
-  } catch {
-    return []
-  }
+async function getPromotions() {
+  const promos = await prisma.property.findMany({
+    where: { statut: "disponible", enPromotion: true },
+    include: propertyIncludeAll,
+    orderBy: { dateCreation: "desc" },
+    take: 9,
+  })
+  return promos.map(serializeProperty)
 }
 
 export default async function PromotionsSection() {
@@ -24,42 +21,34 @@ export default async function PromotionsSection() {
   if (promotions.length === 0) return null
 
   return (
-    <section className="bg-gradient-to-br from-red-50 to-orange-50 py-12">
+    <section className="bg-[#0B1F3A] py-20 lg:py-24">
       <div className="mx-auto max-w-7xl px-4 lg:px-8">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-red-500 px-3 py-1 text-xs font-medium text-white">
-              <Tag className="h-3.5 w-3.5" />
-              {"Offres limitées"}
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-red-400/40 px-3 py-1 text-xs font-medium uppercase tracking-wider text-red-300">
+              Offres limitées
             </div>
-            <h2 className="font-heading text-2xl font-bold text-foreground md:text-3xl">
+            <h2 className="font-heading text-3xl font-bold text-white text-balance md:text-4xl">
               Promotions du moment
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {"Profitez de réductions exclusives sur ces biens sélectionnés"}
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-white/70">
+              Profitez de réductions exclusives sur ces biens sélectionnés.
             </p>
           </div>
-          <Link href="/promotions" className="hidden md:block">
-            <Button variant="outline" className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white">
-              Voir toutes les promotions
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {promotions.map((property) => (
-            <PropertyCard key={property.id} property={property} />
-          ))}
-        </div>
-
-        <div className="mt-6 text-center md:hidden">
           <Link href="/promotions">
-            <Button variant="outline" className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white">
-              Voir toutes les promotions
+            <Button
+              variant="outline"
+              className="border-[#C9A227] bg-transparent text-[#C9A227] hover:bg-[#C9A227] hover:text-white"
+            >
+              <Tag className="mr-2 h-4 w-4" />
+              Toutes les promotions
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
+        </div>
+
+        <div className="[&_button]:border-white/20 [&_button]:bg-white/5 [&_button]:text-white [&_button:hover]:border-[#C9A227] [&_button:hover]:bg-[#C9A227]">
+          <PropertyCarousel properties={promotions} />
         </div>
       </div>
     </section>

@@ -22,7 +22,7 @@ export type PropertyType =
 export interface Property {
   id: number
   titre: string
-  description: string
+  description: string | null
   type: PropertyType
   prix: number
   nombre_chambres: number

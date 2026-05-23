@@ -29,7 +29,7 @@ export function serializeProperty(p: PropertyWithRelations) {
     premium: p.premium,
     en_promotion: p.enPromotion,
     reduction: p.reduction ?? 0,
-    equipements: p.equipements ?? [],
+    equipements: (Array.isArray(p.equipements) ? p.equipements : []) as string[],
     vues: p.vues,
     date_creation: p.dateCreation.toISOString(),
     quartier_id: p.quartierId,

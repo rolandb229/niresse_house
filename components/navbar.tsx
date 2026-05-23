@@ -1,168 +1,231 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
-import { Menu, X, Home, Search, LogIn, User, Hotel, Building2, Key } from "lucide-react"
+import { useEffect, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Menu,
+  X,
+  Home as HomeIcon,
+  Key,
+  Hotel,
+  Building2,
+  Calendar,
+  BedDouble,
+  LogIn,
+  ChevronDown,
+  Search,
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+
+const vivreLinks = [
+  { href: "/recherche?type=location", label: "Location longue durée", icon: Key },
+  { href: "/recherche?type=vente", label: "Vente", icon: HomeIcon },
+  { href: "/recherche?type=appartement_meuble", label: "Appartement meublé", icon: Building2 },
+]
+
+const sejournerLinks = [
+  { href: "/recherche?type=hotel", label: "Hôtels", icon: Hotel },
+  { href: "/recherche?type=auberge", label: "Auberges", icon: Building2 },
+  { href: "/recherche?type=court_sejour", label: "Court séjour", icon: Calendar },
+  { href: "/recherche?type=chambre_meublee", label: "Chambre meublée", icon: BedDouble },
+]
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 24)
+    handler()
+    window.addEventListener("scroll", handler, { passive: true })
+    return () => window.removeEventListener("scroll", handler)
+  }, [])
 
   return (
-    <header className="sticky top-0 z-50 bg-primary text-primary-foreground">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8">
-        {/* Logo */}
+    <header
+      className={`sticky top-0 z-50 transition-colors duration-200 ${
+        scrolled ? "bg-[#0B1F3A] border-b border-white/5" : "bg-[#0B1F3A]"
+      }`}
+    >
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8 lg:py-4">
         <Link href="/" className="flex items-center gap-2">
-          <Home className="h-7 w-7 text-accent" />
-          <span className="font-heading text-xl font-bold tracking-tight">
-            Niresse<span className="text-accent">House</span>
+          <HomeIcon className="h-5 w-5 text-[#C9A227]" />
+          <span className="font-heading text-lg font-bold tracking-tight text-white">
+            Niresse<span className="text-[#C9A227]">House</span>
           </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <div className="hidden items-center gap-5 lg:flex">
-          <Link
-            href="/"
-            className="text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
-          >
-            Accueil
-          </Link>
-          <Link
-            href="/recherche?type=location"
-            className="flex items-center gap-1 text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
-          >
-            <Key className="h-3.5 w-3.5" />
-            Location
-          </Link>
-          <Link
-            href="/recherche?type=vente"
-            className="text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
-          >
-            Vente
-          </Link>
-          <Link
-            href="/recherche?type=auberge"
-            className="flex items-center gap-1 text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            Auberges
-          </Link>
-          <Link
-            href="/recherche?type=hotel"
-            className="flex items-center gap-1 text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
-          >
-            <Hotel className="h-3.5 w-3.5" />
-            {"H\u00f4tels"}
-          </Link>
+        <div className="hidden items-center gap-1 lg:flex">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-white/85 outline-none transition hover:bg-white/10 hover:text-white">
+              Vivre
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              {vivreLinks.map((l) => (
+                <DropdownMenuItem key={l.href} asChild>
+                  <Link href={l.href} className="flex items-center gap-2">
+                    <l.icon className="h-4 w-4 text-[#C9A227]" />
+                    {l.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-white/85 outline-none transition hover:bg-white/10 hover:text-white">
+              Séjourner
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              {sejournerLinks.map((l) => (
+                <DropdownMenuItem key={l.href} asChild>
+                  <Link href={l.href} className="flex items-center gap-2">
+                    <l.icon className="h-4 w-4 text-[#C9A227]" />
+                    {l.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Link
             href="/promotions"
-            className="text-sm font-medium text-accent transition hover:text-accent/80"
+            className="rounded-md px-3 py-2 text-sm font-medium text-[#C9A227] transition hover:bg-white/10"
           >
             Promotions
           </Link>
+
           <Link
             href="/recherche"
-            className="text-sm font-medium text-primary-foreground/80 transition hover:text-accent"
+            className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-white/85 transition hover:bg-white/10 hover:text-white"
           >
-            <Search className="mr-1 inline h-4 w-4" />
+            <Search className="h-3.5 w-3.5" />
             Rechercher
           </Link>
         </div>
 
-        {/* Desktop CTA */}
-        <div className="hidden items-center gap-3 lg:flex">
-          <Button asChild variant="ghost" size="sm" className="text-primary-foreground/80 hover:text-accent hover:bg-primary/80">
+        <div className="hidden items-center gap-2 lg:flex">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="text-white/85 hover:bg-white/10 hover:text-white"
+          >
             <Link href="/connexion">
-              <LogIn className="mr-1 h-4 w-4" />
+              <LogIn className="mr-1.5 h-4 w-4" />
               Connexion
             </Link>
           </Button>
-          <Button asChild size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 font-medium">
-            <Link href="/admin">
-              <User className="mr-1 h-4 w-4" />
-              Espace Admin
-            </Link>
+          <Button
+            asChild
+            size="sm"
+            className="bg-[#C9A227] font-medium text-white hover:bg-[#C9A227]/90"
+          >
+            <Link href="/inscription">Créer un compte</Link>
           </Button>
         </div>
 
-        {/* Mobile toggle */}
         <button
-          className="lg:hidden text-primary-foreground"
+          className="rounded-md p-1.5 text-white hover:bg-white/10 lg:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Ouvrir le menu"
         >
-          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </nav>
 
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="border-t border-primary-foreground/10 bg-primary px-4 pb-4 lg:hidden">
-          <div className="flex flex-col gap-2 pt-3">
-            <Link
-              href="/"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Accueil
-            </Link>
-            <Link
-              href="/recherche?type=location"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Location
-            </Link>
-            <Link
-              href="/recherche?type=vente"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Vente
-            </Link>
-            <Link
-              href="/recherche?type=auberge"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Auberges
-            </Link>
-            <Link
-              href="/recherche?type=hotel"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              {"H\u00f4tels"}
-            </Link>
-            <Link
-              href="/promotions"
-              className="rounded-md px-3 py-2 text-sm font-medium text-accent hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Promotions
-            </Link>
-            <Link
-              href="/recherche"
-              className="rounded-md px-3 py-2 text-sm font-medium text-primary-foreground/80 hover:bg-primary-foreground/10"
-              onClick={() => setMobileOpen(false)}
-            >
-              Rechercher
-            </Link>
-            <div className="mt-2 flex flex-col gap-2">
-              <Button asChild variant="outline" size="sm" className="w-full border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10">
-                <Link href="/connexion" onClick={() => setMobileOpen(false)}>
-                  Connexion
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden border-t border-white/10 bg-[#0B1F3A] lg:hidden"
+          >
+            <div className="flex flex-col gap-1 px-4 pb-4 pt-2">
+              <p className="mb-1 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[#C9A227]">
+                Vivre
+              </p>
+              {vivreLinks.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/85 hover:bg-white/10"
+                >
+                  <l.icon className="h-4 w-4 text-[#C9A227]" />
+                  {l.label}
                 </Link>
-              </Button>
-              <Button asChild size="sm" className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                <Link href="/admin" onClick={() => setMobileOpen(false)}>
-                  Espace Admin
+              ))}
+
+              <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-wider text-[#C9A227]">
+                Séjourner
+              </p>
+              {sejournerLinks.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/85 hover:bg-white/10"
+                >
+                  <l.icon className="h-4 w-4 text-[#C9A227]" />
+                  {l.label}
                 </Link>
-              </Button>
+              ))}
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link
+                  href="/promotions"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-center rounded-md border border-[#C9A227]/40 px-3 py-2 text-sm font-medium text-[#C9A227]"
+                >
+                  Promotions
+                </Link>
+                <Link
+                  href="/recherche"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-center gap-1.5 rounded-md bg-white/10 px-3 py-2 text-sm font-medium text-white"
+                >
+                  <Search className="h-4 w-4" />
+                  Rechercher
+                </Link>
+              </div>
+
+              <div className="mt-3 flex gap-2 border-t border-white/10 pt-3">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 border-white/20 bg-transparent text-white hover:bg-white/10"
+                >
+                  <Link href="/connexion" onClick={() => setMobileOpen(false)}>
+                    Connexion
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  className="flex-1 bg-[#C9A227] text-white hover:bg-[#C9A227]/90"
+                >
+                  <Link href="/inscription" onClick={() => setMobileOpen(false)}>
+                    Inscription
+                  </Link>
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   )
 }

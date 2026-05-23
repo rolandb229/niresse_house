@@ -1,10 +1,11 @@
 import Navbar from "@/components/navbar"
 import HeroSection from "@/components/hero-section"
-import PromotionsSection from "@/components/promotions-section"
+import AudiencesSection from "@/components/audiences-section"
 import FeaturedProperties from "@/components/featured-properties"
-import RecentListings from "@/components/recent-listings"
+import PromotionsSection from "@/components/promotions-section"
 import Testimonials from "@/components/testimonials"
-import TrustSection from "@/components/trust-section"
+import StatsSection from "@/components/stats-section"
+import CtaSection from "@/components/cta-section"
 import Footer from "@/components/footer"
 
 export default function HomePage() {
@@ -12,11 +13,12 @@ export default function HomePage() {
     <main className="bg-background">
       <Navbar />
       <HeroSection />
-      <PromotionsSection />
+      <AudiencesSection />
       <FeaturedProperties />
-      <RecentListings />
+      <PromotionsSection />
       <Testimonials />
-      <TrustSection />
+      <StatsSection />
+      <CtaSection />
       <Footer />
     </main>
   )
